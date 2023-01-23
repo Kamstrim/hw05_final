@@ -1,12 +1,10 @@
 from http import HTTPStatus
 
 from django.test import TestCase, Client
-from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.core.cache import cache
 
-from ..models import Post, Group
-
-User = get_user_model()
+from ..models import Post, Group, User
 
 
 class PostsURLTests(TestCase):
@@ -62,6 +60,7 @@ class PostsURLTests(TestCase):
         self.pages_for_authorized = (
             f'/posts/{self.post.id}/edit/',
             '/create/',
+            '/follow/'
         )
         for page in self.pages_for_authorized:
             with self.subTest(page=page):
@@ -75,9 +74,14 @@ class PostsURLTests(TestCase):
             f'/posts/{self.post.id}/edit/',
             '/create/',
             f'/posts/{self.post.id}/comment/',
+            '/follow/',
+            f'/profile/{self.test_user.username}/follow/',
+            f'/profile/{self.test_user.username}/unfollow/',
+
         )
         for page in self.pages_for_authorized:
             with self.subTest(page=page):
+                cache.clear()
                 response = self.guest_client.get(page)
                 self.assertEqual(response.status_code, HTTPStatus.FOUND)
 
@@ -100,6 +104,7 @@ class PostsURLTests(TestCase):
             f'/posts/{self.post.id}/': 'posts/post_detail.html',
             '/create/': 'posts/create_post.html',
             f'/posts/{self.post.id}/edit/': 'posts/create_post.html',
+            '/unexciting_page/': 'core/404.html'
 
         }
         for url_name, template_name in templates_url_names.items():

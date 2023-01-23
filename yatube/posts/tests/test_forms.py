@@ -3,13 +3,11 @@ import tempfile
 
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
-from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
 
-from ..models import Post
+from ..models import Post, User, Group, Comment
 
-User = get_user_model()
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
 
@@ -36,6 +34,11 @@ class PostCreateFormTests(TestCase):
             content=cls.test_gif,
             content_type='image/gif'
         )
+        cls.group = Group.objects.create(
+            title='Тестовая группа',
+            slug='test-group',
+            description='Тестовое описание'
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -51,7 +54,8 @@ class PostCreateFormTests(TestCase):
         posts_count = Post.objects.count()
         form_data = {
             'text': 'Тестовый текст',
-            'image': self.uploaded
+            'image': self.uploaded,
+            'group': self.group.id
         }
         response = self.authorized_client.post(
             reverse('posts:post_create'),
@@ -62,12 +66,10 @@ class PostCreateFormTests(TestCase):
                              reverse('posts:profile',
                                      kwargs={'username': self.user.username}))
         self.assertEqual(Post.objects.count(), posts_count + 1)
-        self.assertTrue(
-            Post.objects.filter(
-                text='Тестовый текст',
-                image='posts/test.gif'
-            ).exists()
-        )
+        last_post = Post.objects.latest('text', 'group', 'image')
+        self.assertEqual(last_post.text, form_data['text'])
+        self.assertEqual(last_post.group.id, form_data['group'])
+        self.assertEqual(last_post.image, 'posts/test.gif')
 
     def test_edit_post(self):
         """Валидная форма изменяет пост"""
@@ -106,3 +108,6 @@ class PostCreateFormTests(TestCase):
             follow=True
         )
         self.assertEqual(post.comments.count(), comment_count + 1)
+        comment_for_post = Comment.objects.get(id=post.id)
+        self.assertEqual(comment_for_post.text,
+                         form_data['text'])

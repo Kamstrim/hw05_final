@@ -1,4 +1,3 @@
-from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -6,12 +5,13 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
 from django import forms
 
+
 import shutil
 import tempfile
 
-from ..models import Post, Group, Follow
+from ..models import Post, Group, User
+from ..utils import POSTS_PER_PAGE
 
-User = get_user_model()
 TEST_OF_POST: int = 13
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
@@ -29,12 +29,12 @@ class PaginatorViewsTest(TestCase):
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
 
-        bilk_post: list = []
+        bulk_post: list = []
         for i in range(TEST_OF_POST):
-            bilk_post.append(Post(text=f'Тестовый текст {i}',
+            bulk_post.append(Post(text=f'Тестовый текст {i}',
                                   group=self.group,
                                   author=self.user))
-        Post.objects.bulk_create(bilk_post)
+        Post.objects.bulk_create(bulk_post)
 
     def test_correct_page_context(self):
         templates_for_test = (
@@ -52,13 +52,13 @@ class PaginatorViewsTest(TestCase):
                 response_for_first_page = self.authorized_client.get(template)
                 self.assertEqual(len(
                     response_for_first_page.context['page_obj']
-                ), 10)
+                ), POSTS_PER_PAGE)
                 response_for_two_page = self.authorized_client.get(
                     f'{template}?page=2'
                 )
                 self.assertEqual(len(
                     response_for_two_page.context['page_obj']
-                ), 3)
+                ), (TEST_OF_POST - POSTS_PER_PAGE))
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
@@ -131,6 +131,7 @@ class PostsURLTests(TestCase):
             reverse('posts:post_edit',
                     kwargs={'post_id': self.post.id}
                     ): 'posts/create_post.html',
+            reverse('posts:follow_index'): 'posts/follow.html',
         }
         for reverse_name, template in templates_pages_names.items():
             with self.subTest(reverse_name=reverse_name):
@@ -277,11 +278,12 @@ class PostsURLTests(TestCase):
         )
         self.assertEqual(len(response_before_follow.context['page_obj']), 0)
 
-        Follow.objects.create(
-            user=self.user,
-            author=self.following_user
+        self.authorized_client.get(
+            reverse('posts:profile_follow',
+                    args={self.following_user.username}
+                    )
         )
-
+        cache.clear()
         response_after_follow = self.authorized_client.get(
             reverse('posts:follow_index')
         )
@@ -291,11 +293,12 @@ class PostsURLTests(TestCase):
             response_after_follow.context['page_obj']
         )
 
-        Follow.objects.filter(
-            user=self.user,
-            author=self.following_user
-        ).delete()
-
+        self.authorized_client.get(
+            reverse('posts:profile_unfollow',
+                    args={self.following_user.username}
+                    )
+        )
+        cache.clear()
         response_after_delete_follow = self.authorized_client.get(
             reverse('posts:follow_index')
         )
