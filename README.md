@@ -28,7 +28,7 @@ Yatube - это социальная сеть с авторизацией, пе�
 1. Клонировать репозиторий:
 
    ```python
-   git clone https://github.com/kamstrim/hw05_final.git
+   git clone https://github.com/kamstrim/yatube.git
    ```
 
 2. Перейти в папку с проектом:
